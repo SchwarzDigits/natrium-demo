@@ -1,0 +1,27 @@
+[versions]
+kotlin = "2.3.0"
+datetime = "0.6.1"
+agp = "9.0.0"
+compose-jetbrains = "1.8.2"
+coroutines = "1.10.2"
+navigation-compose = "2.9.2"
+lifecycle-viewmodel-compose = "2.9.6"
+activity-compose = "1.9.0"
+filekit = "0.8.8"
+okio = "3.9.0"
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+android-application = { id = "com.android.application", version.ref = "agp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-jetbrains = { id = "org.jetbrains.compose", version.ref = "compose-jetbrains" }
+
+[libraries]
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
+navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigation-compose" }
+lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle-viewmodel-compose" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
+datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
+filekit-compose = { module = "io.github.vinceglb:filekit-compose", version.ref = "filekit" }
+okio-core = { module = "com.squareup.okio:okio", version.ref = "okio" }
