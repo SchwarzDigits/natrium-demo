@@ -1,4 +1,4 @@
-# Showcase
+# Natrium Demo
 
 Kotlin Multiplatform Compose demo app for the Natrium SDK — a wrapper around Wire's Kalium messaging library for secure communication.
 
@@ -13,37 +13,38 @@ Targets **Android**, **iOS** (arm64 + simulator), and **Desktop** (JVM).
 
 ## First-Time Setup
 
-### 1. Clone Natrium (sibling directory)
-
-Showcase includes Natrium as a [Gradle composite build](https://docs.gradle.org/current/userguide/composite_builds.html). The `settings.gradle.kts` expects Natrium at `../natrium` relative to this project:
+Natrium Demo consumes the Natrium SDK via a [Gradle composite build](https://docs.gradle.org/current/userguide/composite_builds.html). Both repos must sit side-by-side on disk:
 
 ```
 parent/
-  natrium/      <-- Natrium SDK (with Kalium submodule)
-  showcase/     <-- this project
+  natrium/         <-- Natrium SDK (with Kalium submodule)
+  natrium-demo/    <-- this project
 ```
 
-Clone Natrium next to the showcase directory and initialize its Kalium submodule:
+### 1. Clone Natrium Demo
 
 ```bash
-# from the parent directory of showcase
-git clone [Natrium Repo URL] natrium
+git clone https://github.com/SchwarzDigits/natrium-demo.git
+```
+
+### 2. Clone Natrium (sibling directory)
+
+`settings.gradle.kts` expects Natrium at `../natrium` relative to this project. Clone it next to `natrium-demo` and initialize its Kalium submodule:
+
+```bash
+# from the parent directory of natrium-demo
+git clone https://github.com/SchwarzDigits/natrium.git
 cd natrium
 git submodule update --init --recursive
 cd ..
 ```
 
+> **Important:** the `submodule update --init --recursive` step is required, not optional — Natrium itself includes Kalium as a nested composite build, and the Gradle sync will fail if `natrium/kalium/` is empty.
+
 > **Custom path?** If Natrium lives elsewhere, adjust the `natrium.compositeBuildPath` path in `gradle.properties`:
 > ```properties
 > natrium.compositeBuildPath=../path-to-natrium-sdk
 > ```
-
-### 2. Clone Showcase
-
-```bash
-git clone git@ssh.dev.azure.com:v3/schwarzit-chicago/schwarzit.civicseal/showcase showcase
-cd showcase
-```
 
 ### 3. Configure Backend Properties
 
@@ -77,12 +78,18 @@ These values are code-generated into `BackendProperties.kt` at build time. The b
 
 ```
 
-For iOS, open `iosApp/` in Xcode and build from there. The KMP framework is configurSced as a static framework named `ComposeApp`.
+For iOS, open `iosApp/` in Xcode and build from there. The KMP framework is configured as a static framework named `ComposeApp`.
+
+## How the Composite Build Works
+
+`settings.gradle.kts` reads the `natrium.compositeBuildPath` property from `gradle.properties` (default `../natrium`) and calls `includeBuild(...)` on it. A dependency substitution maps the Maven coordinate `schwarz.digits:natrium-core` (referenced from `composeApp/build.gradle.kts`) to the local `:natrium-core` Gradle project, so changes to Natrium are picked up immediately without publishing.
+
+If you hit "module not found: schwarz.digits:natrium-core", check that `../natrium/natrium-core` exists and that `natrium.compositeBuildPath` points at a valid Natrium checkout.
 
 ## Project Structure
 
 ```
-showcase/
+natrium-demo/
   composeApp/
     src/
       commonMain/    # Shared UI (Compose + Material3) and logic
