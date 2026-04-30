@@ -1,0 +1,13 @@
+name: Compliance
+
+on:
+  pull_request:
+  push: { branches: [main] }
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  compliance:
+    uses: SchwarzDigits/oss-compliance/.github/workflows/full-check.yml@v1
+ 
