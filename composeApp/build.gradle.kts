@@ -70,7 +70,7 @@ kotlin {
 
             implementation(libs.navigation.compose)
             implementation(libs.lifecycle.viewmodel.compose)
-            implementation("schwarz.digits:natrium-core")
+            implementation("schwarz.opensource.natrium:natrium-core:0.0.1")
             implementation(libs.datetime)
             implementation(libs.filekit.compose)
             implementation(libs.okio.core)
