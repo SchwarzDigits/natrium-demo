@@ -95,15 +95,6 @@ fun ConversationsScreen(viewModel: ConversationsViewModel, onConversationClick: 
                     ListItem(
                         headlineContent = { Text(conversation.title) },
                         supportingContent = null,
-                        trailingContent = {
-                            if (conversation.isArchived) {
-                                Text(
-                                    text  = "Archiviert",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        },
                         modifier = Modifier.combinedClickable(
                             onClick = { onConversationClick(conversation.operations) },
                             onLongClick = { viewModel.showActions(conversation) },
