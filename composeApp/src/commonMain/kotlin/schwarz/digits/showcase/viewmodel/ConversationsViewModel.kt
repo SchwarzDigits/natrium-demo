@@ -20,7 +20,6 @@ import schwarz.digits.natrium.session.Session
 data class ConversationItem(
     val operations: ConversationOperations,
     val title: String,
-    val isArchived: Boolean,
 )
 
 data class ConversationsUiState(
@@ -153,7 +152,6 @@ class ConversationsViewModel(private val session: Session) : ViewModel() {
                 ConversationItem(
                     operations = ops,
                     title      = info?.title ?: "-",
-                    isArchived = info?.isArchived ?: false,
                 )
             }
             _uiState.update { it.copy(conversations = items, isLoading = false) }
