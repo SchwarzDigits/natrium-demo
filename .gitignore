@@ -587,3 +587,15 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Xcode specifics
+.DS_Store
+*.swp
+*.lock
+*.xcuserstate
+*.xcuserdata
+*.xcscmblueprint
+DerivedData/
+*.moved-aside
+*.xccheckout
+*.playground*
