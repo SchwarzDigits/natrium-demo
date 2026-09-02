@@ -41,17 +41,26 @@ val generateBackendConfig by tasks.registering {
 }
 
 kotlin {
-    jvmToolchain(17)
+    // 21 to match natrium-core / Kalium 0.0.7, which are published as Java 21 bytecode.
+    jvmToolchain(21)
 
     androidTarget()
 
     listOf(
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { iosTarget ->
+        iosArm64() to "ios-arm64",
+        iosSimulatorArm64() to "ios-arm64-simulator",
+    ).forEach { (iosTarget, avsSlice) ->
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
-            isStatic = true
+            // Dynamic so Gradle fully links the native deps (CoreCrypto, libsodium, the avs stub)
+            // into a self-contained framework; the Xcode app then only embeds ComposeApp.framework.
+            isStatic = false
+            // Kalium's calling module links Wire's proprietary `avs` framework, which is not
+            // published to Maven. This demo ships a *stub* avs.framework (no-op symbols) so it links
+            // and runs without calling (disabled via enableCalling = false). This is the reference
+            // pattern a consuming app replicates — see the "iOS: linking AVS" section in README.md.
+            // To enable real calling, drop in Wire's avs.xcframework and point `-F` at it instead.
+            linkerOpts("-F", project.file("avs-stub/$avsSlice").absolutePath)
         }
     }
 
@@ -103,13 +112,14 @@ android {
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.3")
+    // 2.1.5+ required by Kalium 0.0.7's Android artifacts (e.g. domain-cells-android).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 compose.desktop {
