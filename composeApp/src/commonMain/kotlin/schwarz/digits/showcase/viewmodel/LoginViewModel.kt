@@ -19,6 +19,8 @@ import schwarz.digits.natrium.session.LoginResult
 import schwarz.digits.natrium.session.SSOLoginError
 import schwarz.digits.natrium.session.SSOLoginResult
 import schwarz.digits.natrium.session.Session
+import schwarz.digits.natrium.session.headless.HeadlessSsoInjection
+import schwarz.digits.natrium.session.headless.HeadlessSsoInterceptor
 import schwarz.digits.showcase.deeplink.DeepLinkHandler
 
 data class LoginUiState(
@@ -34,6 +36,12 @@ data class LoginUiState(
     val ssoAuthorizationUrl: String? = null,
     val ssoCookie: String = "",
 )
+
+private object StubIdpHeaders {
+    const val USER_ID = "X-Stub-User-Id"
+}
+
+private const val STUB_USER_ID = "demo-user"
 
 class LoginViewModel : ViewModel() {
 
@@ -88,6 +96,20 @@ class LoginViewModel : ViewModel() {
         viewModelScope.launch {
             val result = Natrium.ssoLogin(_uiState.value.email)
             handleSsoResult(result, onLoginSuccess)
+        }
+    }
+
+    fun ssoLoginHeadless(onLoginSuccess: (Session) -> Unit) {
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        val ssoCode = _uiState.value.ssoCode
+        val interceptor = HeadlessSsoInterceptor { _ ->
+            HeadlessSsoInjection.Builder()
+                .header(StubIdpHeaders.USER_ID, STUB_USER_ID)
+                .build()
+        }
+        viewModelScope.launch {
+            val result = Natrium.ssoLoginHeadless(ssoCode, interceptor)
+            handleLoginResult(result, onLoginSuccess)
         }
     }
 
