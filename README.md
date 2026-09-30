@@ -6,7 +6,7 @@ Targets **Android**, **iOS** (arm64 + simulator), and **Desktop** (JVM).
 
 ## Prerequisites
 
-- **JDK 17+**
+- **JDK 21+** (Kalium's JVM/Android artifacts are Java 21 bytecode)
 - **Android SDK** (compileSdk 36, minSdk 26) — install via Android Studio or `sdkmanager`
 - **Xcode** (macOS only, required for iOS builds)
 - **Git**
@@ -53,7 +53,9 @@ These values are code-generated into `BackendProperties.kt` at build time. The b
 
 ```
 
-For iOS, open `iosApp/` in Xcode and build from there. The KMP framework is configured as a static framework named `ComposeApp`.
+For iOS, open `iosApp/` in Xcode and build from there. The KMP framework is configured as a
+**dynamic** framework named `ComposeApp` (dynamic so the native dependencies are fully linked into a
+self-contained framework).
 
 ## Project Structure
 

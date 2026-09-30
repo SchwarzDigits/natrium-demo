@@ -41,17 +41,20 @@ val generateBackendConfig by tasks.registering {
 }
 
 kotlin {
-    jvmToolchain(17)
+    // 21 to match natrium-core / Kalium 0.0.7, which are published as Java 21 bytecode.
+    jvmToolchain(21)
 
     androidTarget()
 
     listOf(
         iosArm64(),
-        iosSimulatorArm64()
+        iosSimulatorArm64(),
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
-            isStatic = true
+            // Dynamic so Gradle fully links the native deps (CoreCrypto, libsodium)
+            // into a self-contained framework; the Xcode app then only embeds ComposeApp.framework.
+            isStatic = false
         }
     }
 
@@ -70,7 +73,7 @@ kotlin {
 
             implementation(libs.navigation.compose)
             implementation(libs.lifecycle.viewmodel.compose)
-            implementation("schwarz.opensource.natrium:natrium-core:0.0.3")
+            implementation("schwarz.opensource.natrium:natrium-core:0.0.5")
             implementation(libs.datetime)
             implementation(libs.filekit.compose)
             implementation(libs.okio.core)
@@ -103,13 +106,14 @@ android {
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.3")
+    // 2.1.5+ required by Kalium 0.0.7's Android artifacts (e.g. domain-cells-android).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 compose.desktop {
