@@ -343,6 +343,32 @@ fun LoginScreen(
             ) {
                 Text("SSO Login with Code")
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Headless SSO (no browser)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = { viewModel.ssoLoginHeadless(onLoginSuccess) },
+                enabled = !uiState.isLoading && uiState.ssoCode.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Headless SSO Login")
+                }
+            }
         }
 
         if (uiState.isLoading && uiState.showDeviceList) {
