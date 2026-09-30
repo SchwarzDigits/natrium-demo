@@ -47,20 +47,14 @@ kotlin {
     androidTarget()
 
     listOf(
-        iosArm64() to "ios-arm64",
-        iosSimulatorArm64() to "ios-arm64-simulator",
-    ).forEach { (iosTarget, avsSlice) ->
+        iosArm64(),
+        iosSimulatorArm64(),
+    ).forEach { iosTarget ->
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
-            // Dynamic so Gradle fully links the native deps (CoreCrypto, libsodium, the avs stub)
+            // Dynamic so Gradle fully links the native deps (CoreCrypto, libsodium)
             // into a self-contained framework; the Xcode app then only embeds ComposeApp.framework.
             isStatic = false
-            // Kalium's calling module links Wire's proprietary `avs` framework, which is not
-            // published to Maven. This demo ships a *stub* avs.framework (no-op symbols) so it links
-            // and runs without calling (disabled via enableCalling = false). This is the reference
-            // pattern a consuming app replicates — see the "iOS: linking AVS" section in README.md.
-            // To enable real calling, drop in Wire's avs.xcframework and point `-F` at it instead.
-            linkerOpts("-F", project.file("avs-stub/$avsSlice").absolutePath)
         }
     }
 
@@ -79,7 +73,7 @@ kotlin {
 
             implementation(libs.navigation.compose)
             implementation(libs.lifecycle.viewmodel.compose)
-            implementation("schwarz.opensource.natrium:natrium-core:0.0.2")
+            implementation("schwarz.opensource.natrium:natrium-core:0.0.5")
             implementation(libs.datetime)
             implementation(libs.filekit.compose)
             implementation(libs.okio.core)

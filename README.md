@@ -55,21 +55,7 @@ These values are code-generated into `BackendProperties.kt` at build time. The b
 
 For iOS, open `iosApp/` in Xcode and build from there. The KMP framework is configured as a
 **dynamic** framework named `ComposeApp` (dynamic so the native dependencies are fully linked into a
-self-contained framework — see [iOS: linking AVS](#ios-linking-avs)).
-
-## iOS: linking AVS
-
-**iOS only** — Android and Desktop need nothing here.
-
-Kalium's calling module references Wire's proprietary **`avs`** framework, which on iOS/Kotlin-Native
-must be resolved at **compile/link time** (on Android it ships as a `.so` via Maven). `avs` is not on
-Maven, so an iOS build otherwise fails with `ld: framework 'avs' not found`.
-
-natrium doesn't use calling, so this demo links a small **stub** `avs.framework` (no-op symbols)
-instead of the real binary. It lives under [`composeApp/avs-stub/`](composeApp/avs-stub/) and is wired
-per iOS target in `composeApp/build.gradle.kts` via `linkerOpts("-F", …)`. To replicate in your own
-app, copy that folder and add the `-F` line — see
-[`composeApp/avs-stub/README.md`](composeApp/avs-stub/README.md).
+self-contained framework).
 
 ## Project Structure
 
@@ -81,7 +67,6 @@ natrium-demo/
       androidMain/   # Android Activity entry point
       desktopMain/   # JVM desktop window entry point
       iosMain/       # iOS MainViewController
-    avs-stub/        # Stub avs.framework for iOS linking (see "iOS: linking AVS")
   iosApp/            # Xcode project wrapper
   gradle/            # Gradle wrapper + version catalog
 ```
