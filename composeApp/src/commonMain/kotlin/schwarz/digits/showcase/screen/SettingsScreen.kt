@@ -22,7 +22,11 @@ import schwarz.digits.showcase.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onLogout: () -> Unit) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    onLogout: () -> Unit,
+    testCases: @Composable () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
@@ -90,6 +94,8 @@ fun SettingsScreen(viewModel: SettingsViewModel, onLogout: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            testCases()
             Spacer(modifier = Modifier.weight(1f))
             Button(onClick = { viewModel.logout(onLogout) }) {
                 Text("Logout")

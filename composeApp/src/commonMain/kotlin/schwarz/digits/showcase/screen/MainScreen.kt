@@ -24,6 +24,8 @@ import schwarz.digits.showcase.navigation.Route
 import schwarz.digits.showcase.viewmodel.ConversationsViewModel
 import schwarz.digits.showcase.viewmodel.ChatViewModel
 import schwarz.digits.showcase.viewmodel.DashboardViewModel
+import schwarz.digits.showcase.testcases.TestCaseSection
+import schwarz.digits.showcase.testcases.TestCaseViewModel
 import schwarz.digits.showcase.viewmodel.SettingsViewModel
 
 @Composable
@@ -93,7 +95,11 @@ fun MainScreen(session: Session, onLogout: () -> Unit) {
                 )
             }
             composable(Route.SETTINGS) {
-                SettingsScreen(viewModel { SettingsViewModel(session) }, onLogout)
+                SettingsScreen(
+                    viewModel = viewModel { SettingsViewModel(session) },
+                    onLogout = onLogout,
+                    testCases = { TestCaseSection(viewModel { TestCaseViewModel(session) }) },
+                )
             }
             composable(Route.CHAT) {
                 val ops = conversationsViewModel.selectedConversation.collectAsState().value
