@@ -16,13 +16,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,18 +62,52 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import okio.FileSystem
 import okio.SYSTEM
+import schwarz.digits.natrium.chat.ChatMessage
+import schwarz.digits.natrium.chat.MessageValue
 import schwarz.digits.natrium.chat.Request
 import schwarz.digits.natrium.chat.Response
 import schwarz.digits.showcase.viewmodel.PickedFile
 
 // Rendering of structured requests/responses (see natrium-core/docs/requests.md).
 
+/** A request's first response, shown inside the request bubble instead of as a separate message. */
+internal data class RequestAnswer(
+    val message: ChatMessage,
+    val response: Response,
+    val attachments: List<ChatMessage>,
+)
+
+internal class AnswerIndex(
+    val byRequestId: Map<String, RequestAnswer>,
+    /** Response messages and their file messages that are rendered inside a request bubble. */
+    val hiddenMessageIds: Set<String>,
+)
+
+internal fun indexAnswers(messages: List<ChatMessage>): AnswerIndex {
+    val byId = messages.associateBy { it.id }
+    val answers = mutableMapOf<String, RequestAnswer>()
+    val hidden = mutableSetOf<String>()
+    messages.forEach { message ->
+        if (message.value !is MessageValue.RequestValue) return@forEach
+        val responseMessage = message.answeredByMessageId?.let { byId[it] } ?: return@forEach
+        val response = (responseMessage.value as? MessageValue.ResponseValue)?.response ?: return@forEach
+        val attachments = response.attachmentIds().mapNotNull { byId[it] }
+        answers[message.id] = RequestAnswer(responseMessage, response, attachments)
+        hidden += responseMessage.id
+        hidden += attachments.map { it.id }
+    }
+    return AnswerIndex(answers, hidden)
+}
+
 @Composable
 internal fun RequestContent(
     request: Request,
     isAnswered: Boolean,
+    answer: RequestAnswer?,
     onAnswer: () -> Unit,
+    onOpenAttachment: (ChatMessage) -> Unit,
 ) {
+    val response = answer?.response
     Column(
         modifier = Modifier.widthIn(max = 320.dp).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -89,9 +126,10 @@ internal fun RequestContent(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            request.deadline?.let {
+            val deadline = request.deadline
+            if (deadline != null && !isAnswered) {
                 Spacer(Modifier.width(8.dp))
-                DeadlineBadge(it)
+                DeadlineBadge(deadline)
             }
         }
         if (request.subject.isNotBlank()) {
@@ -100,10 +138,48 @@ internal fun RequestContent(
         Text(request.message, style = MaterialTheme.typography.bodyMedium)
 
         when (request) {
-            is Request.SingleSelect -> request.options.forEach { OptionLine("○ ${it.title}") }
-            is Request.MultiSelect -> request.options.forEach { OptionLine("☐ ${it.title}") }
-            is Request.Appointment -> AppointmentLine(request.from, request.to)
+            is Request.SingleSelect -> {
+                val selected = (response as? Response.SingleSelect)?.selectedOptionId
+                request.options.forEach { option ->
+                    val checked = option.id == selected
+                    OptionStateLine(
+                        title = option.title,
+                        checked = checked,
+                        icon = if (checked) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                    )
+                }
+            }
+            is Request.MultiSelect -> {
+                val selected = (response as? Response.MultiSelect)?.selectedOptionIds.orEmpty()
+                request.options.forEach { option ->
+                    val checked = option.id in selected
+                    OptionStateLine(
+                        title = option.title,
+                        checked = checked,
+                        icon = if (checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                    )
+                }
+            }
+            is Request.Appointment -> {
+                AppointmentLine(request.from, request.to)
+                if (response is Response.Appointment) {
+                    OptionStateLine(
+                        title = if (response.accepted) "Accepted" else "Declined",
+                        checked = true,
+                        icon = if (response.accepted) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                    )
+                }
+            }
             is Request.Asset -> Unit
+        }
+
+        if (answer != null && answer.attachments.isNotEmpty()) {
+            answer.attachments.forEach { AttachmentLine(it, onOpenAttachment) }
+        }
+
+        if (response is Response.FreeText) {
+            HorizontalDivider()
+            Text(response.text, style = MaterialTheme.typography.bodyMedium)
         }
 
         if (isAnswered) {
@@ -111,17 +187,56 @@ internal fun RequestContent(
                 Icon(
                     Icons.Default.CheckCircle,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(Modifier.width(4.dp))
-                Text("Answered", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                val by = answer?.message?.let { if (it.isSelf) "you" else it.sender.name }
+                Text(
+                    if (by != null) "Answered by $by" else "Answered",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         } else {
             Button(onClick = onAnswer, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                 Text("Answer")
             }
         }
+    }
+}
+
+@Composable
+private fun OptionStateLine(title: String, checked: Boolean, icon: ImageVector) {
+    val color = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = color)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (checked) FontWeight.Medium else FontWeight.Normal,
+            color = if (checked) MaterialTheme.colorScheme.onSurface else color,
+        )
+    }
+}
+
+@Composable
+private fun AttachmentLine(fileMessage: ChatMessage, onOpen: (ChatMessage) -> Unit) {
+    val name = (fileMessage.value as? MessageValue.FileValue)?.fileLink?.fileName ?: "Attachment"
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onOpen(fileMessage) }.padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -340,11 +455,6 @@ private fun FilesCard(files: List<PickedFile>, onPick: () -> Unit, onRemove: (Pi
             Text(if (files.isEmpty()) "Select document" else "Add another document", style = MaterialTheme.typography.bodyMedium)
         }
     }
-}
-
-@Composable
-private fun OptionLine(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

@@ -102,6 +102,18 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
 
     var answeringRequest by remember { mutableStateOf<ChatMessage?>(null) }
     val messagesById = remember(uiState.messages) { uiState.messages.associateBy { it.id } }
+    val answerIndex = remember(uiState.messages) { indexAnswers(uiState.messages) }
+    val visibleMessages = remember(uiState.messages, answerIndex) {
+        uiState.messages.filter { it.id !in answerIndex.hiddenMessageIds }
+    }
+    val openAttachment: (ChatMessage) -> Unit = { fileMessage ->
+        scope.launch {
+            when (val result = viewModel.downloadFile(fileMessage.id)) {
+                is FileDownloadResult.Success -> openFile(result.filePath.toString())
+                is FileDownloadResult.Failure -> Unit
+            }
+        }
+    }
 
     answeringRequest?.let { requestMessage ->
         val request = (requestMessage.value as? MessageValue.RequestValue)?.request
@@ -117,9 +129,9 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty())
-            listState.animateScrollToItem(uiState.messages.lastIndex)
+    LaunchedEffect(visibleMessages.size) {
+        if (visibleMessages.isNotEmpty())
+            listState.animateScrollToItem(visibleMessages.lastIndex)
     }
 
     if (showSheet) {
@@ -207,8 +219,16 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             }
 
             LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                items(uiState.messages) { msg ->
-                    MessageBubble(msg, viewModel, scope, messagesById, onAnswer = { answeringRequest = msg })
+                items(visibleMessages, key = { it.id }) { msg ->
+                    MessageBubble(
+                        msg = msg,
+                        viewModel = viewModel,
+                        coroutineScope = scope,
+                        messagesById = messagesById,
+                        answer = answerIndex.byRequestId[msg.id],
+                        onAnswer = { answeringRequest = msg },
+                        onOpenAttachment = openAttachment,
+                    )
                 }
             }
 
@@ -335,12 +355,14 @@ private fun MessageBubble(
     viewModel: ChatViewModel,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     messagesById: Map<String, ChatMessage>,
+    answer: RequestAnswer?,
     onAnswer: () -> Unit,
+    onOpenAttachment: (ChatMessage) -> Unit,
 ) {
     when (msg.value) {
         is MessageValue.SystemValue -> SystemMessageRow(msg)
         is MessageValue.KnockValue -> KnockMessageRow(msg)
-        else -> RegularMessageBubble(msg, viewModel, coroutineScope, messagesById, onAnswer)
+        else -> RegularMessageBubble(msg, viewModel, coroutineScope, messagesById, answer, onAnswer, onOpenAttachment)
     }
 }
 
@@ -379,7 +401,9 @@ private fun RegularMessageBubble(
     viewModel: ChatViewModel,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     messagesById: Map<String, ChatMessage>,
+    answer: RequestAnswer?,
     onAnswer: () -> Unit,
+    onOpenAttachment: (ChatMessage) -> Unit,
 ) {
     val alignment = if (msg.isSelf) Alignment.End else Alignment.Start
     val bubbleColor = if (msg.isSelf)
@@ -535,7 +559,9 @@ private fun RegularMessageBubble(
                         is MessageValue.RequestValue -> RequestContent(
                             request = value.request,
                             isAnswered = msg.answeredByMessageId != null,
+                            answer = answer,
                             onAnswer = onAnswer,
+                            onOpenAttachment = onOpenAttachment,
                         )
                         is MessageValue.ResponseValue -> ResponseContent(
                             response = value.response,
