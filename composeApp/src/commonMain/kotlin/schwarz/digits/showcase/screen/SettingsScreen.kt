@@ -1,6 +1,10 @@
 package schwarz.digits.showcase.screen
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -16,7 +22,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import schwarz.digits.showcase.viewmodel.SettingsViewModel
 
@@ -28,6 +37,7 @@ fun SettingsScreen(
     testCases: @Composable () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val clipboardManager = LocalClipboardManager.current
 
     Scaffold(
         topBar = {
@@ -37,6 +47,19 @@ fun SettingsScreen(
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)
         ) {
+            Text("User ID", style = MaterialTheme.typography.labelMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SelectionContainer(modifier = Modifier.weight(1f)) {
+                    Text(uiState.userId, style = MaterialTheme.typography.bodyMedium)
+                }
+                IconButton(
+                    onClick = { clipboardManager.setText(AnnotatedString(uiState.userId)) },
+                    enabled = uiState.userId.isNotEmpty(),
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy user ID")
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = uiState.displayName,
                 onValueChange = { viewModel.onDisplayNameChange(it) },

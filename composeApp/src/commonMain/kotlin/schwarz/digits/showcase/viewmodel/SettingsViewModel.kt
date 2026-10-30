@@ -12,6 +12,7 @@ import schwarz.digits.natrium.session.UpdateEmailResult
 import schwarz.digits.natrium.session.UpdateHandleResult
 
 data class SettingsUiState(
+    val userId: String = "",
     val displayName: String = "",
     val handle: String = "",
     val email: String = "",
@@ -29,6 +30,7 @@ class SettingsViewModel(private val session: Session) : ViewModel() {
             val info = session.sessionInfo()
             if (info != null) {
                 _uiState.value = _uiState.value.copy(
+                    userId = info.user.userId.toString(),
                     displayName = info.user.name ?: "",
                     handle = info.handle ?: "",
                     email = info.email ?: ""
