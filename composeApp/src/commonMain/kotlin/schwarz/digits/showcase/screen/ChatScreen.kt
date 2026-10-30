@@ -42,6 +42,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -81,8 +82,9 @@ import schwarz.digits.natrium.chat.QuotedMessage
 import schwarz.digits.natrium.chat.ReactionInfo
 import schwarz.digits.showcase.platform.openFile
 import schwarz.digits.showcase.viewmodel.ChatViewModel
+import schwarz.digits.showcase.viewmodel.PickedFile
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
@@ -95,7 +97,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 val bytes = file.readBytes()
                 val tempPath = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "natrium-upload-${file.name}"
                 FileSystem.SYSTEM.write(tempPath) { write(bytes) }
-                viewModel.sendFile(tempPath, file.name, bytes.size.toLong())
+                viewModel.addAttachment(PickedFile(tempPath, file.name, bytes.size.toLong()))
             }
         }
     }
@@ -226,6 +228,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                         coroutineScope = scope,
                         messagesById = messagesById,
                         answer = answerIndex.byRequestId[msg.id],
+                        textAttachments = answerIndex.textAttachments[msg.id].orEmpty(),
                         onAnswer = { answeringRequest = msg },
                         onOpenAttachment = openAttachment,
                     )
@@ -279,6 +282,23 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 }
             }
 
+            if (uiState.pendingAttachments.isNotEmpty()) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    uiState.pendingAttachments.forEach { file ->
+                        InputChip(
+                            selected = false,
+                            onClick = { viewModel.removeAttachment(file) },
+                            label = { Text(file.fileName, maxLines = 1) },
+                            leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                            trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp)) },
+                        )
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -294,7 +314,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 )
                 IconButton(
                     onClick = viewModel::sendMessage,
-                    enabled = uiState.inputText.isNotBlank(),
+                    enabled = uiState.inputText.isNotBlank() || uiState.pendingAttachments.isNotEmpty(),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
                 }
@@ -356,13 +376,16 @@ private fun MessageBubble(
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     messagesById: Map<String, ChatMessage>,
     answer: RequestAnswer?,
+    textAttachments: List<ChatMessage>,
     onAnswer: () -> Unit,
     onOpenAttachment: (ChatMessage) -> Unit,
 ) {
     when (msg.value) {
         is MessageValue.SystemValue -> SystemMessageRow(msg)
         is MessageValue.KnockValue -> KnockMessageRow(msg)
-        else -> RegularMessageBubble(msg, viewModel, coroutineScope, messagesById, answer, onAnswer, onOpenAttachment)
+        else -> RegularMessageBubble(
+            msg, viewModel, coroutineScope, messagesById, answer, textAttachments, onAnswer, onOpenAttachment,
+        )
     }
 }
 
@@ -402,6 +425,7 @@ private fun RegularMessageBubble(
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     messagesById: Map<String, ChatMessage>,
     answer: RequestAnswer?,
+    textAttachments: List<ChatMessage>,
     onAnswer: () -> Unit,
     onOpenAttachment: (ChatMessage) -> Unit,
 ) {
@@ -438,9 +462,10 @@ private fun RegularMessageBubble(
                         is MessageValue.TextValue -> {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(value.value)
-                                if (value.attachmentMessageIds.isNotEmpty()) {
-                                    AttachmentHint(value.attachmentMessageIds.size)
-                                }
+                                textAttachments.forEach { AttachmentLine(it, onOpenAttachment) }
+                                // referenced files that are not loaded (yet)
+                                val missing = value.attachmentMessageIds.size - textAttachments.size
+                                if (missing > 0) AttachmentHint(missing)
                                 if (msg.isEdited) {
                                     Text(
                                         "(edited)",

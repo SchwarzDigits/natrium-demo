@@ -79,15 +79,25 @@ internal data class RequestAnswer(
 
 internal class AnswerIndex(
     val byRequestId: Map<String, RequestAnswer>,
-    /** Response messages and their file messages that are rendered inside a request bubble. */
+    /** File messages referenced by a free-text message, keyed by the text message id. */
+    val textAttachments: Map<String, List<ChatMessage>>,
+    /** Response messages and file messages that are rendered inside another bubble. */
     val hiddenMessageIds: Set<String>,
 )
 
 internal fun indexAnswers(messages: List<ChatMessage>): AnswerIndex {
     val byId = messages.associateBy { it.id }
     val answers = mutableMapOf<String, RequestAnswer>()
+    val textAttachments = mutableMapOf<String, List<ChatMessage>>()
     val hidden = mutableSetOf<String>()
     messages.forEach { message ->
+        val text = message.value as? MessageValue.TextValue
+        if (text != null && text.attachmentMessageIds.isNotEmpty()) {
+            val attachments = text.attachmentMessageIds.mapNotNull { byId[it] }
+            textAttachments[message.id] = attachments
+            hidden += attachments.map { it.id }
+            return@forEach
+        }
         if (message.value !is MessageValue.RequestValue) return@forEach
         val responseMessage = message.answeredByMessageId?.let { byId[it] } ?: return@forEach
         val response = (responseMessage.value as? MessageValue.ResponseValue)?.response ?: return@forEach
@@ -96,7 +106,7 @@ internal fun indexAnswers(messages: List<ChatMessage>): AnswerIndex {
         hidden += responseMessage.id
         hidden += attachments.map { it.id }
     }
-    return AnswerIndex(answers, hidden)
+    return AnswerIndex(answers, textAttachments, hidden)
 }
 
 @Composable
@@ -222,7 +232,7 @@ private fun OptionStateLine(title: String, checked: Boolean, icon: ImageVector) 
 }
 
 @Composable
-private fun AttachmentLine(fileMessage: ChatMessage, onOpen: (ChatMessage) -> Unit) {
+internal fun AttachmentLine(fileMessage: ChatMessage, onOpen: (ChatMessage) -> Unit) {
     val name = (fileMessage.value as? MessageValue.FileValue)?.fileLink?.fileName ?: "Attachment"
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onOpen(fileMessage) }.padding(vertical = 2.dp),

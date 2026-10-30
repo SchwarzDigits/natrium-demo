@@ -35,6 +35,7 @@ data class ChatUiState(
     val joinLinkError: String? = null,
     val sendError: String? = null,
     val replyingTo: ChatMessage? = null,
+    val pendingAttachments: List<PickedFile> = emptyList(),
 )
 
 class ChatViewModel(private val conversationOperations: ConversationOperations) : ViewModel() {
@@ -116,13 +117,25 @@ class ChatViewModel(private val conversationOperations: ConversationOperations) 
         }
     }
 
+    fun addAttachment(file: PickedFile) {
+        _uiState.update { it.copy(pendingAttachments = it.pendingAttachments + file) }
+    }
+
+    fun removeAttachment(file: PickedFile) {
+        _uiState.update { it.copy(pendingAttachments = it.pendingAttachments - file) }
+    }
+
     fun sendMessage() {
         val text = _uiState.value.inputText.trim()
-        if (text.isEmpty()) return
+        val attachments = _uiState.value.pendingAttachments
+        if (text.isEmpty() && attachments.isEmpty()) return
         val replyTo = _uiState.value.replyingTo
-        _uiState.update { it.copy(inputText = "", replyingTo = null) }
+        _uiState.update { it.copy(inputText = "", replyingTo = null, pendingAttachments = emptyList(), sendError = null) }
         viewModelScope.launch {
-            if (replyTo != null) {
+            if (attachments.isNotEmpty()) {
+                // Natrium uploads the files first and references them from the text message
+                handleSendResult(conversationOperations.chat().sendText(text, attachments.map { it.toFileLink() }))
+            } else if (replyTo != null) {
                 conversationOperations.chat().sendReply(MessageValue.TextValue(text), replyTo.id)
             } else {
                 conversationOperations.chat().sendMessage(MessageValue.TextValue(text))
@@ -135,22 +148,11 @@ class ChatViewModel(private val conversationOperations: ConversationOperations) 
         return conversationOperations.chat().downloadFile(messageId)
     }
 
-    fun sendFile(path: Path, fileName: String, size: Long) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(sendError = null) }
-            val mimeType = guessMimeType(fileName)
-            val fileLink = FileLink.fromLocal(path, fileName, mimeType, size)
-            handleSendResult(conversationOperations.chat().sendMessage(MessageValue.FileValue(fileLink)))
-        }
-    }
-
     /** Answers a request; [attachments] are uploaded by Natrium before the response is sent. */
     fun sendResponse(requestMessageId: String, response: Response, attachments: List<PickedFile> = emptyList()) {
         viewModelScope.launch {
             _uiState.update { it.copy(sendError = null) }
-            val fileLinks = attachments.map {
-                FileLink.fromLocal(it.path, it.fileName, guessMimeType(it.fileName), it.size)
-            }
+            val fileLinks = attachments.map { it.toFileLink() }
             handleSendResult(conversationOperations.chat().sendResponse(requestMessageId, response, fileLinks))
         }
     }
@@ -185,6 +187,8 @@ class ChatViewModel(private val conversationOperations: ConversationOperations) 
 
 /** A locally copied file picked by the user. */
 data class PickedFile(val path: Path, val fileName: String, val size: Long)
+
+private fun PickedFile.toFileLink() = FileLink.fromLocal(path, fileName, guessMimeType(fileName), size)
 
 private fun guessMimeType(fileName: String): String {
     val ext = fileName.substringAfterLast('.', "").lowercase()
