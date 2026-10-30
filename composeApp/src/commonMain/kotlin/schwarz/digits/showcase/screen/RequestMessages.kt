@@ -49,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import schwarz.digits.showcase.platform.keyboardPadding
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -320,7 +321,7 @@ internal fun RequestAnswerSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding().keyboardPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("My answer", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
