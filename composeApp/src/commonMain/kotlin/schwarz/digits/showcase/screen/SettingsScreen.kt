@@ -37,7 +37,6 @@ import schwarz.digits.showcase.viewmodel.SettingsViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onLogout: () -> Unit,
-    testCases: @Composable () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val clipboardManager = LocalClipboardManager.current
@@ -125,8 +124,6 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            testCases()
             Spacer(modifier = Modifier.height(24.dp))
             Button(onClick = { viewModel.logout(onLogout) }) {
                 Text("Logout")
