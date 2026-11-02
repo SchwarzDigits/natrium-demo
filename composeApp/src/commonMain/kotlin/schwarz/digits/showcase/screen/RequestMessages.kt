@@ -16,14 +16,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Button
@@ -63,6 +65,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import okio.FileSystem
 import okio.SYSTEM
+import schwarz.digits.natrium.chat.AppointmentSlot
 import schwarz.digits.natrium.chat.ChatMessage
 import schwarz.digits.natrium.chat.MessageValue
 import schwarz.digits.natrium.chat.Request
@@ -80,8 +83,8 @@ internal data class RequestAnswer(
 
 internal class AnswerIndex(
     val byRequestId: Map<String, RequestAnswer>,
-    /** File messages referenced by a free-text message, keyed by the text message id. */
-    val textAttachments: Map<String, List<ChatMessage>>,
+    /** File messages referenced by a free-text message or a request, keyed by that message's id. */
+    val messageAttachments: Map<String, List<ChatMessage>>,
     /** Response messages and file messages that are rendered inside another bubble. */
     val hiddenMessageIds: Set<String>,
 )
@@ -89,15 +92,18 @@ internal class AnswerIndex(
 internal fun indexAnswers(messages: List<ChatMessage>): AnswerIndex {
     val byId = messages.associateBy { it.id }
     val answers = mutableMapOf<String, RequestAnswer>()
-    val textAttachments = mutableMapOf<String, List<ChatMessage>>()
+    val messageAttachments = mutableMapOf<String, List<ChatMessage>>()
     val hidden = mutableSetOf<String>()
     messages.forEach { message ->
-        val text = message.value as? MessageValue.TextValue
-        if (text != null && text.attachmentMessageIds.isNotEmpty()) {
-            val attachments = text.attachmentMessageIds.mapNotNull { byId[it] }
-            textAttachments[message.id] = attachments
+        val referencedIds = when (val value = message.value) {
+            is MessageValue.TextValue -> value.attachmentMessageIds
+            is MessageValue.RequestValue -> value.attachmentMessageIds
+            else -> emptyList()
+        }
+        if (referencedIds.isNotEmpty()) {
+            val attachments = referencedIds.mapNotNull { byId[it] }
+            messageAttachments[message.id] = attachments
             hidden += attachments.map { it.id }
-            return@forEach
         }
         if (message.value !is MessageValue.RequestValue) return@forEach
         val responseMessage = message.answeredByMessageId?.let { byId[it] } ?: return@forEach
@@ -107,12 +113,13 @@ internal fun indexAnswers(messages: List<ChatMessage>): AnswerIndex {
         hidden += responseMessage.id
         hidden += attachments.map { it.id }
     }
-    return AnswerIndex(answers, textAttachments, hidden)
+    return AnswerIndex(answers, messageAttachments, hidden)
 }
 
 @Composable
 internal fun RequestContent(
     request: Request,
+    requestAttachments: List<ChatMessage>,
     isAnswered: Boolean,
     answer: RequestAnswer?,
     onAnswer: () -> Unit,
@@ -147,6 +154,7 @@ internal fun RequestContent(
             Text(request.subject, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         }
         Text(request.message, style = MaterialTheme.typography.bodyMedium)
+        requestAttachments.forEach { AttachmentLine(it, onOpenAttachment) }
 
         when (request) {
             is Request.SingleSelect -> {
@@ -172,16 +180,40 @@ internal fun RequestContent(
                 }
             }
             is Request.Appointment -> {
-                AppointmentLine(request.from, request.to)
-                if (response is Response.Appointment) {
+                val selected = (response as? Response.Appointment)?.selectedSlotId
+                request.slots.forEach { slot ->
+                    val checked = slot.id == selected
                     OptionStateLine(
-                        title = if (response.accepted) "Accepted" else "Declined",
-                        checked = true,
-                        icon = if (response.accepted) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                        title = formatSlot(slot),
+                        checked = checked,
+                        icon = if (checked) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                    )
+                }
+                if (request.location.isNotBlank()) {
+                    InfoLine(Icons.Default.Place, request.location)
+                }
+            }
+            is Request.Asset -> {
+                if (request.document.isNotBlank()) {
+                    InfoLine(Icons.Default.Description, request.document)
+                }
+                if (request.mimeTypes.isNotEmpty()) {
+                    Text(
+                        "Accepted: ${request.mimeTypes.joinToString(", ") { it.fileTypeLabel() }}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            is Request.Asset -> Unit
+            is Request.Acknowledge -> {
+                val checked = response is Response.Acknowledge
+                OptionStateLine(
+                    title = request.confirmation,
+                    checked = checked,
+                    icon = if (checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                )
+            }
+            is Request.FreeText -> Unit
         }
 
         if (answer != null && answer.attachments.isNotEmpty()) {
@@ -229,6 +261,15 @@ private fun OptionStateLine(title: String, checked: Boolean, icon: ImageVector) 
             fontWeight = if (checked) FontWeight.Medium else FontWeight.Normal,
             color = if (checked) MaterialTheme.colorScheme.onSurface else color,
         )
+    }
+}
+
+@Composable
+private fun InfoLine(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -300,15 +341,21 @@ internal fun RequestAnswerSheet(
     onSubmit: (Response, List<PickedFile>) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showFreeText by remember { mutableStateOf(false) }
+    // a free-text request is answered with free text only
+    val freeTextOnly = request is Request.FreeText
+    var showFreeText by remember { mutableStateOf(freeTextOnly) }
     var freeText by remember { mutableStateOf("") }
     var selectedSingle by remember { mutableStateOf<String?>(null) }
     var selectedMulti by remember { mutableStateOf(emptySet<String>()) }
-    var appointmentAccepted by remember { mutableStateOf<Boolean?>(null) }
+    var selectedSlot by remember { mutableStateOf<String?>(null) }
+    var acknowledged by remember { mutableStateOf(false) }
     val files = remember { mutableStateListOf<PickedFile>() }
 
     val scope = rememberCoroutineScope()
-    val filePicker = rememberFilePickerLauncher(type = PickerType.File()) { file ->
+    val extensions = (request as? Request.Asset)?.mimeTypes.orEmpty().flatMap { it.fileExtensions() }
+    val filePicker = rememberFilePickerLauncher(
+        type = PickerType.File(extensions = extensions.ifEmpty { null }),
+    ) { file ->
         if (file != null) {
             scope.launch {
                 val bytes = file.readBytes()
@@ -332,11 +379,13 @@ internal fun RequestAnswerSheet(
             )
 
             if (showFreeText) {
+                val maxLength = (request as? Request.FreeText)?.maxLength
                 OutlinedTextField(
                     value = freeText,
-                    onValueChange = { freeText = it },
+                    onValueChange = { freeText = if (maxLength != null) it.take(maxLength) else it },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Your message...") },
+                    supportingText = maxLength?.let { { Text("${freeText.length} / $it") } },
                     shape = RoundedCornerShape(12.dp),
                     minLines = 3,
                 )
@@ -354,15 +403,17 @@ internal fun RequestAnswerSheet(
                         }
                     }
                     is Request.Asset -> FilesCard(files, onPick = { filePicker.launch() }, onRemove = { files.remove(it) })
-                    is Request.Appointment -> {
-                        AppointmentLine(request.from, request.to)
-                        OptionsCard(listOf("accept" to "Accept appointment", "decline" to "Decline appointment")) { id, title ->
-                            val accepted = id == "accept"
-                            ChoiceRow(title, onClick = { appointmentAccepted = accepted }) {
-                                RadioButton(selected = appointmentAccepted == accepted, onClick = { appointmentAccepted = accepted })
-                            }
+                    is Request.Appointment -> OptionsCard(request.slots.map { it.id to formatSlot(it) }) { id, title ->
+                        ChoiceRow(title, onClick = { selectedSlot = id }) {
+                            RadioButton(selected = selectedSlot == id, onClick = { selectedSlot = id })
                         }
                     }
+                    is Request.Acknowledge -> OptionsCard(listOf("ack" to request.confirmation)) { _, title ->
+                        ChoiceRow(title, onClick = { acknowledged = !acknowledged }) {
+                            Checkbox(checked = acknowledged, onCheckedChange = { acknowledged = it })
+                        }
+                    }
+                    is Request.FreeText -> Unit
                 }
             }
 
@@ -371,17 +422,21 @@ internal fun RequestAnswerSheet(
                 is Request.MultiSelect -> selectedMulti.takeIf { it.isNotEmpty() }
                     ?.let { selected -> Response.MultiSelect(request.options.map { it.id }.filter { it in selected }) }
                 is Request.Asset -> if (files.isNotEmpty()) Response.Asset() else null
-                is Request.Appointment -> appointmentAccepted?.let { Response.Appointment(it) }
+                is Request.Appointment -> selectedSlot?.let { Response.Appointment(it) }
+                is Request.Acknowledge -> if (acknowledged) Response.Acknowledge else null
+                is Request.FreeText -> null
             }
             val submitEnabled = if (showFreeText) freeText.isNotBlank() else structured != null
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { showFreeText = !showFreeText },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text(if (showFreeText) "Show options" else "Free text")
+                if (!freeTextOnly) {
+                    OutlinedButton(
+                        onClick = { showFreeText = !showFreeText },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(if (showFreeText) "Show options" else "Free text")
+                    }
                 }
                 Button(
                     onClick = {
@@ -469,19 +524,6 @@ private fun FilesCard(files: List<PickedFile>, onPick: () -> Unit, onRemove: (Pi
 }
 
 @Composable
-private fun AppointmentLine(from: Instant, to: Instant) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            "${formatDateTime(from)} – ${formatTime(to)}",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
-    }
-}
-
-@Composable
 private fun DeadlineBadge(deadline: Instant) {
     val days = (deadline - Clock.System.now()).inWholeDays
     val text = when {
@@ -508,6 +550,8 @@ internal fun Request.typeLabel(): String = when (this) {
     is Request.MultiSelect -> "Multiple choice"
     is Request.Asset -> "Document upload"
     is Request.Appointment -> "Appointment"
+    is Request.Acknowledge -> "Acknowledgement"
+    is Request.FreeText -> "Question"
 }
 
 private fun Request.icon(): ImageVector = when (this) {
@@ -515,26 +559,32 @@ private fun Request.icon(): ImageVector = when (this) {
     is Request.MultiSelect -> Icons.Default.CheckBox
     is Request.Asset -> Icons.Default.Description
     is Request.Appointment -> Icons.Default.DateRange
+    is Request.Acknowledge -> Icons.Default.Visibility
+    is Request.FreeText -> Icons.Default.Edit
 }
 
 private fun Request.answerHint(): String = when (this) {
     is Request.SingleSelect -> "Please choose one option or write a free-text message."
     is Request.MultiSelect -> "You can choose several options or write a free-text message."
     is Request.Asset -> "Please upload the requested documents or write a free-text message."
-    is Request.Appointment -> "Please accept or decline the suggested appointment or write a free-text message."
+    is Request.Appointment -> "Please choose one of the suggested appointments or write a free-text message."
+    is Request.Acknowledge -> "Please confirm or write a free-text message."
+    is Request.FreeText -> "Please answer the question."
 }
 
 internal fun responseSummary(response: Response, request: Request?): String {
     val titles = when (request) {
         is Request.SingleSelect -> request.options.associate { it.id to it.title }
         is Request.MultiSelect -> request.options.associate { it.id to it.title }
+        is Request.Appointment -> request.slots.associate { it.id to formatSlot(it) }
         else -> emptyMap()
     }
     return when (response) {
         is Response.SingleSelect -> titles[response.selectedOptionId] ?: response.selectedOptionId
         is Response.MultiSelect -> response.selectedOptionIds.joinToString(", ") { titles[it] ?: it }
         is Response.Asset -> "Documents submitted"
-        is Response.Appointment -> if (response.accepted) "Appointment accepted" else "Appointment declined"
+        is Response.Appointment -> titles[response.selectedSlotId] ?: response.selectedSlotId
+        is Response.Acknowledge -> (request as? Request.Acknowledge)?.confirmation ?: "Confirmed"
         is Response.FreeText -> response.text
     }
 }
@@ -549,6 +599,19 @@ private fun formatDateTime(instant: Instant): String {
     val local = instant.toLocalDateTime(TimeZone.currentSystemDefault())
     return "${local.dayOfMonth.pad()}.${local.monthNumber.pad()}.${local.year} ${local.hour.pad()}:${local.minute.pad()}"
 }
+
+private fun formatSlot(slot: AppointmentSlot) = "${formatDateTime(slot.from)} – ${formatTime(slot.to)}"
+
+// Common mime types → labels and picker extensions; unknown types fall back to the raw value / no filter.
+private val fileTypes = mapOf(
+    "application/pdf" to listOf("pdf"),
+    "image/jpeg" to listOf("jpg", "jpeg"),
+    "image/png" to listOf("png"),
+)
+
+private fun String.fileTypeLabel() = fileTypes[this]?.first()?.uppercase() ?: this
+
+private fun String.fileExtensions() = fileTypes[this].orEmpty()
 
 private fun formatTime(instant: Instant): String {
     val local = instant.toLocalDateTime(TimeZone.currentSystemDefault())

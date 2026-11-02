@@ -229,7 +229,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                         coroutineScope = scope,
                         messagesById = messagesById,
                         answer = answerIndex.byRequestId[msg.id],
-                        textAttachments = answerIndex.textAttachments[msg.id].orEmpty(),
+                        messageAttachments = answerIndex.messageAttachments[msg.id].orEmpty(),
                         onAnswer = { answeringRequest = msg },
                         onOpenAttachment = openAttachment,
                     )
@@ -377,7 +377,7 @@ private fun MessageBubble(
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     messagesById: Map<String, ChatMessage>,
     answer: RequestAnswer?,
-    textAttachments: List<ChatMessage>,
+    messageAttachments: List<ChatMessage>,
     onAnswer: () -> Unit,
     onOpenAttachment: (ChatMessage) -> Unit,
 ) {
@@ -385,7 +385,7 @@ private fun MessageBubble(
         is MessageValue.SystemValue -> SystemMessageRow(msg)
         is MessageValue.KnockValue -> KnockMessageRow(msg)
         else -> RegularMessageBubble(
-            msg, viewModel, coroutineScope, messagesById, answer, textAttachments, onAnswer, onOpenAttachment,
+            msg, viewModel, coroutineScope, messagesById, answer, messageAttachments, onAnswer, onOpenAttachment,
         )
     }
 }
@@ -426,7 +426,7 @@ private fun RegularMessageBubble(
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     messagesById: Map<String, ChatMessage>,
     answer: RequestAnswer?,
-    textAttachments: List<ChatMessage>,
+    messageAttachments: List<ChatMessage>,
     onAnswer: () -> Unit,
     onOpenAttachment: (ChatMessage) -> Unit,
 ) {
@@ -463,9 +463,9 @@ private fun RegularMessageBubble(
                         is MessageValue.TextValue -> {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(value.value)
-                                textAttachments.forEach { AttachmentLine(it, onOpenAttachment) }
+                                messageAttachments.forEach { AttachmentLine(it, onOpenAttachment) }
                                 // referenced files that are not loaded (yet)
-                                val missing = value.attachmentMessageIds.size - textAttachments.size
+                                val missing = value.attachmentMessageIds.size - messageAttachments.size
                                 if (missing > 0) AttachmentHint(missing)
                                 if (msg.isEdited) {
                                     Text(
@@ -584,6 +584,7 @@ private fun RegularMessageBubble(
                     }
                         is MessageValue.RequestValue -> RequestContent(
                             request = value.request,
+                            requestAttachments = messageAttachments,
                             isAnswered = msg.answeredByMessageId != null,
                             answer = answer,
                             onAnswer = onAnswer,

@@ -6,6 +6,7 @@ package schwarz.digits.showcase.testcases
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import schwarz.digits.natrium.chat.AppointmentSlot
 import schwarz.digits.natrium.chat.MessageValue
 import schwarz.digits.natrium.chat.Option
 import schwarz.digits.natrium.chat.Request
@@ -54,15 +55,33 @@ internal object TestCaseGenerator {
                 Request.Asset(
                     subject = "Proof of income",
                     message = "Please upload your last three payslips.",
+                    document = "Payslips of the last three months",
+                    mimeTypes = listOf("application/pdf"),
                     deadline = now + 7.days,
                 )
             ),
             MessageValue.RequestValue(
                 Request.Appointment(
                     subject = "Appointment",
-                    message = "We suggest the following appointment at our office.",
-                    from = appointmentStart,
-                    to = appointmentStart + 30.minutes,
+                    message = "Which appointment at our office suits you?",
+                    slots = listOf(0, 1, 2).map { day ->
+                        val start = appointmentStart + day.days
+                        AppointmentSlot("slot_$day", start, start + 30.minutes)
+                    },
+                    location = "Town hall, room 4",
+                )
+            ),
+            MessageValue.RequestValue(
+                Request.Acknowledge(
+                    subject = "Notice",
+                    message = "Please confirm that you have received the notice.",
+                    confirmation = "I have taken note of the notice.",
+                )
+            ),
+            MessageValue.RequestValue(
+                Request.FreeText(
+                    message = "How many parking spaces are planned?",
+                    maxLength = 1000,
                 )
             ),
         )
