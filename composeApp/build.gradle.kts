@@ -34,6 +34,8 @@ val generateBackendConfig by tasks.registering {
             |    const val TEAMS = "${backendProp("backend.teams")}"
             |    const val BLACK_LIST = "${backendProp("backend.blackList")}"
             |    const val WEBSITE = "${backendProp("backend.website")}"
+            |    // optional: base URL of case links ("Behördenlink"), see natrium-core/docs/case-links.md
+            |    val CASE_LINK: String? = ${backendProps.getProperty("backend.caseLink")?.let { "\"$it\"" } ?: "null"}
             |}
             """.trimMargin()
         )

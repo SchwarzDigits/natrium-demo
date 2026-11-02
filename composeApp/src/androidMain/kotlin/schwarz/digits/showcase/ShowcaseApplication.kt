@@ -25,6 +25,7 @@ class ShowcaseApplication : Application() {
                 teams = BackendProperties.TEAMS,
                 blackList = BackendProperties.BLACK_LIST,
                 website = BackendProperties.WEBSITE,
+                caseLinkBase = BackendProperties.CASE_LINK,
             ),
             NatriumPlatform(this),
         )

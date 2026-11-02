@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import schwarz.digits.natrium.caselink.GenerateCaseLinkResult
 import schwarz.digits.natrium.session.Session
 import schwarz.digits.natrium.session.UpdateDisplayNameResult
 import schwarz.digits.natrium.session.UpdateEmailResult
@@ -18,6 +19,8 @@ data class SettingsUiState(
     val email: String = "",
     val isUpdating: Boolean = false,
     val updateMessage: String? = null,
+    val caseLink: String? = null,
+    val caseLinkError: String? = null,
 )
 
 class SettingsViewModel(private val session: Session) : ViewModel() {
@@ -35,6 +38,22 @@ class SettingsViewModel(private val session: Session) : ViewModel() {
                     handle = info.handle ?: "",
                     email = info.email ?: ""
                 )
+            }
+        }
+    }
+
+    /** "Behördenlink generieren": a new case link (new ref) on every press. */
+    fun generateCaseLink() {
+        viewModelScope.launch {
+            _uiState.value = when (val r = session.generateCaseLink()) {
+                is GenerateCaseLinkResult.Success ->
+                    _uiState.value.copy(caseLink = r.caseLink.url, caseLinkError = null)
+                GenerateCaseLinkResult.Failure.NotConfigured ->
+                    _uiState.value.copy(caseLink = null, caseLinkError = "Not configured: set backend.caseLink in local.properties.")
+                GenerateCaseLinkResult.Failure.NotLoggedIn ->
+                    _uiState.value.copy(caseLink = null, caseLinkError = "Not logged in.")
+                is GenerateCaseLinkResult.Failure.Unknown ->
+                    _uiState.value.copy(caseLink = null, caseLinkError = r.message)
             }
         }
     }

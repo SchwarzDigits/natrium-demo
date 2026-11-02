@@ -18,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -65,6 +66,23 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.ContentCopy, contentDescription = "Copy user ID")
                 }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(onClick = { viewModel.generateCaseLink() }) {
+                Text("Behördenlink generieren")
+            }
+            uiState.caseLink?.let { link ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SelectionContainer(modifier = Modifier.weight(1f)) {
+                        Text(link, style = MaterialTheme.typography.bodySmall)
+                    }
+                    IconButton(onClick = { clipboardManager.setText(AnnotatedString(link)) }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy link")
+                    }
+                }
+            }
+            uiState.caseLinkError?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(

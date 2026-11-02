@@ -38,9 +38,11 @@ backend.webSocket=https://your-websocket-host
 backend.teams=https://your-teams-host
 backend.blackList=https://your-blacklist-host
 backend.website=https://your-website-host
+# optional: base URL of the authority web client's import page ("Behördenlink" in Settings)
+backend.caseLink=https://your-authority-client/import
 ```
 
-These values are code-generated into `BackendProperties.kt` at build time. The build will fail if any `backend.*` key is missing.
+These values are code-generated into `BackendProperties.kt` at build time. The build will fail if any `backend.*` key except the optional `backend.caseLink` is missing.
 
 ## Build & Run
 
