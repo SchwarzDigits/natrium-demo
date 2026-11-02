@@ -153,7 +153,11 @@ internal fun RequestContent(
         if (request.subject.isNotBlank()) {
             Text(request.subject, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         }
-        Text(request.message, style = MaterialTheme.typography.bodyMedium)
+        if (request.text.isNotBlank()) {
+            Text(request.text, style = MaterialTheme.typography.bodyMedium)
+            HorizontalDivider()
+        }
+        Text(request.message, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
         requestAttachments.forEach { AttachmentLine(it, onOpenAttachment) }
 
         when (request) {

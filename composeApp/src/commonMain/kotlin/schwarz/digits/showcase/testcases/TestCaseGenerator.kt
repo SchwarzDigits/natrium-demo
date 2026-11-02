@@ -36,6 +36,7 @@ internal object TestCaseGenerator {
                 Request.SingleSelect(
                     subject = "Main residence",
                     message = "Is the address on file your main residence?",
+                    text = "Dear citizen,\nfor the further review of your application we need some information.",
                     options = listOf(Option("yes", "Yes"), Option("no", "No")),
                     deadline = now + 14.days,
                 )
