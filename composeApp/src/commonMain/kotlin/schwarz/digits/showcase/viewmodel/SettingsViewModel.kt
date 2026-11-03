@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import schwarz.digits.natrium.caselink.GenerateCaseLinkResult
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import schwarz.digits.natrium.session.Session
 import schwarz.digits.natrium.session.UpdateDisplayNameResult
 import schwarz.digits.natrium.session.UpdateEmailResult
@@ -42,14 +44,20 @@ class SettingsViewModel(private val session: Session) : ViewModel() {
         }
     }
 
-    /** "Behördenlink generieren": a new case link (new ref) on every press. */
+    /**
+     * "Behördenlink generieren": a new case link on every press. The demo has no ids of its own to
+     * attach a link to, so every press passes a new random UUID as the link's ref.
+     */
+    @OptIn(ExperimentalUuidApi::class)
     fun generateCaseLink() {
         viewModelScope.launch {
-            _uiState.value = when (val r = session.generateCaseLink()) {
+            _uiState.value = when (val r = session.generateCaseLink(ref = Uuid.random().toString())) {
                 is GenerateCaseLinkResult.Success ->
                     _uiState.value.copy(caseLink = r.caseLink.url, caseLinkError = null)
                 GenerateCaseLinkResult.Failure.NotConfigured ->
                     _uiState.value.copy(caseLink = null, caseLinkError = "Not configured: set backend.caseLink in local.properties.")
+                GenerateCaseLinkResult.Failure.InvalidRef ->
+                    _uiState.value.copy(caseLink = null, caseLinkError = "Invalid ref.")
                 GenerateCaseLinkResult.Failure.NotLoggedIn ->
                     _uiState.value.copy(caseLink = null, caseLinkError = "Not logged in.")
                 is GenerateCaseLinkResult.Failure.Unknown ->
