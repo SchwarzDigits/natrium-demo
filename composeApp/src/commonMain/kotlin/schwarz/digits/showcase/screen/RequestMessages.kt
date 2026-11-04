@@ -423,7 +423,7 @@ internal fun RequestAnswerSheet(
 
             val structured: Response? = when (request) {
                 is Request.SingleSelect -> selectedSingle?.let { Response.SingleSelect(it) }
-                is Request.MultiSelect -> selectedMulti.takeIf { it.isNotEmpty() }
+                is Request.MultiSelect -> selectedMulti.takeIf { it.size in request.selectionRange() }
                     ?.let { selected -> Response.MultiSelect(request.options.map { it.id }.filter { it in selected }) }
                 is Request.Asset -> if (files.isNotEmpty()) Response.Asset() else null
                 is Request.Appointment -> selectedSlot?.let { Response.Appointment(it) }
@@ -569,7 +569,12 @@ private fun Request.icon(): ImageVector = when (this) {
 
 private fun Request.answerHint(): String = when (this) {
     is Request.SingleSelect -> "Please choose one option or write a free-text message."
-    is Request.MultiSelect -> "You can choose several options or write a free-text message."
+    is Request.MultiSelect -> when {
+        minSelections == null && maxSelections == null -> "You can choose several options or write a free-text message."
+        minSelections == maxSelections -> "Please choose $minSelections options or write a free-text message."
+        maxSelections == null -> "Please choose at least $minSelections options or write a free-text message."
+        else -> "Please choose ${minSelections ?: 1} to $maxSelections options or write a free-text message."
+    }
     is Request.Asset -> "Please upload the requested documents or write a free-text message."
     is Request.Appointment -> "Please choose one of the suggested appointments or write a free-text message."
     is Request.Acknowledge -> "Please confirm or write a free-text message."
@@ -623,3 +628,6 @@ private fun formatTime(instant: Instant): String {
 }
 
 private fun Int.pad() = toString().padStart(2, '0')
+
+/** How many options a multiple-choice answer may pick: at least one, at most all, unless the request says otherwise. */
+private fun Request.MultiSelect.selectionRange(): IntRange = (minSelections ?: 1)..(maxSelections ?: options.size)

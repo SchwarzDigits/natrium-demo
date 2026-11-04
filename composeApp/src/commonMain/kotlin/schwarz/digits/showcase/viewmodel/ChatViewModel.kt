@@ -167,6 +167,7 @@ class ChatViewModel(private val conversationOperations: ConversationOperations) 
             is SendMessageResult.Failure.InvalidResponse -> when (result.reason) {
                 InvalidResponseReason.ALREADY_ANSWERED -> "This request has already been answered."
                 InvalidResponseReason.REQUEST_NOT_FOUND -> "The request could not be found."
+                InvalidResponseReason.SELECTION_OUT_OF_RANGE -> "Please choose the number of options the request asks for."
                 else -> "Invalid answer (${result.reason})."
             }
             is SendMessageResult.Failure.Unknown -> result.message
