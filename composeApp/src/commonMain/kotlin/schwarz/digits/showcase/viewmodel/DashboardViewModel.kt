@@ -8,7 +8,8 @@ import kotlinx.coroutines.flow.update
 import schwarz.digits.natrium.Cancellable
 import schwarz.digits.natrium.session.Session
 
-data class DashboardUiState(val userName: String? = null)
+/** [updateRecommended]: a newer protocol version than this app's arrived, see Session.observeUpdateRecommended. */
+data class DashboardUiState(val userName: String? = null, val updateRecommended: Boolean = false)
 
 class DashboardViewModel(session: Session) : ViewModel() {
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -18,8 +19,13 @@ class DashboardViewModel(session: Session) : ViewModel() {
         _uiState.update { it.copy(userName = info.user.name) }
     }
 
+    private val updates: Cancellable = session.observeUpdateRecommended {
+        _uiState.update { it.copy(updateRecommended = true) }
+    }
+
     override fun onCleared() {
         super.onCleared()
         cancellable.cancel()
+        updates.cancel()
     }
 }

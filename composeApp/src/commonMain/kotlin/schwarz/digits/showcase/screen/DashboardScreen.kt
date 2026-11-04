@@ -14,6 +14,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import schwarz.digits.showcase.viewmodel.DashboardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,6 +34,14 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Welcome to Showcase", style = MaterialTheme.typography.headlineMedium)
                 uiState.userName?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (uiState.updateRecommended) {
+                    Text(
+                        "A newer version of this app is available. Please update to see all messages.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
+                }
             }
         }
     }

@@ -317,7 +317,7 @@ internal fun UnsupportedContent() {
         Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
         Text(
-            "This message is not supported. Please update the app.",
+            "This message needs a newer version of the app.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
