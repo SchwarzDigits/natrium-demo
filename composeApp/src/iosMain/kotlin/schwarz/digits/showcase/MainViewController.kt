@@ -1,5 +1,6 @@
 package schwarz.digits.showcase
 
+import androidx.compose.ui.uikit.OnFocusBehavior
 import androidx.compose.ui.window.ComposeUIViewController
 import schwarz.digits.natrium.BackendConfig
 import schwarz.digits.natrium.Natrium
@@ -15,8 +16,12 @@ fun MainViewController() = run {
             teams = BackendProperties.TEAMS,
             blackList = BackendProperties.BLACK_LIST,
             website = BackendProperties.WEBSITE,
+            caseLinkBase = BackendProperties.CASE_LINK,
         ),
         NatriumPlatform(),
     )
-    ComposeUIViewController { App() }
+    // The default (FocusableAboveKeyboard) shifts the whole view up when a text field
+    // gets focus, which pushes the top bar and back button off screen. The screens make
+    // room for the keyboard themselves with keyboardPadding() (imePadding on iOS) instead.
+    ComposeUIViewController(configure = { onFocusBehavior = OnFocusBehavior.DoNothing }) { App() }
 }

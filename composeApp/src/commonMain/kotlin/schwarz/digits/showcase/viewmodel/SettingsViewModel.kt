@@ -6,17 +6,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import schwarz.digits.natrium.caselink.GenerateCaseLinkResult
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import schwarz.digits.natrium.session.Session
 import schwarz.digits.natrium.session.UpdateDisplayNameResult
 import schwarz.digits.natrium.session.UpdateEmailResult
 import schwarz.digits.natrium.session.UpdateHandleResult
 
 data class SettingsUiState(
+    val userId: String = "",
     val displayName: String = "",
     val handle: String = "",
     val email: String = "",
     val isUpdating: Boolean = false,
     val updateMessage: String? = null,
+    val caseLink: String? = null,
+    val caseLinkError: String? = null,
 )
 
 class SettingsViewModel(private val session: Session) : ViewModel() {
@@ -29,10 +35,33 @@ class SettingsViewModel(private val session: Session) : ViewModel() {
             val info = session.sessionInfo()
             if (info != null) {
                 _uiState.value = _uiState.value.copy(
+                    userId = info.user.userId.toString(),
                     displayName = info.user.name ?: "",
                     handle = info.handle ?: "",
                     email = info.email ?: ""
                 )
+            }
+        }
+    }
+
+    /**
+     * "Behördenlink generieren": a new case link on every press. The demo has no ids of its own to
+     * attach a link to, so every press passes a new random UUID as the link's ref.
+     */
+    @OptIn(ExperimentalUuidApi::class)
+    fun generateCaseLink() {
+        viewModelScope.launch {
+            _uiState.value = when (val r = session.generateCaseLink(ref = Uuid.random().toString())) {
+                is GenerateCaseLinkResult.Success ->
+                    _uiState.value.copy(caseLink = r.caseLink.url, caseLinkError = null)
+                GenerateCaseLinkResult.Failure.NotConfigured ->
+                    _uiState.value.copy(caseLink = null, caseLinkError = "Not configured: set backend.caseLink in local.properties.")
+                GenerateCaseLinkResult.Failure.InvalidRef ->
+                    _uiState.value.copy(caseLink = null, caseLinkError = "Invalid ref.")
+                GenerateCaseLinkResult.Failure.NotLoggedIn ->
+                    _uiState.value.copy(caseLink = null, caseLinkError = "Not logged in.")
+                is GenerateCaseLinkResult.Failure.Unknown ->
+                    _uiState.value.copy(caseLink = null, caseLinkError = r.message)
             }
         }
     }

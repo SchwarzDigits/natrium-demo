@@ -93,7 +93,10 @@ fun MainScreen(session: Session, onLogout: () -> Unit) {
                 )
             }
             composable(Route.SETTINGS) {
-                SettingsScreen(viewModel { SettingsViewModel(session) }, onLogout)
+                SettingsScreen(
+                    viewModel = viewModel { SettingsViewModel(session) },
+                    onLogout = onLogout,
+                )
             }
             composable(Route.CHAT) {
                 val ops = conversationsViewModel.selectedConversation.collectAsState().value

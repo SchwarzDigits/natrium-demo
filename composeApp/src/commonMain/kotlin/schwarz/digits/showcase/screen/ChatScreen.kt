@@ -42,6 +42,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -61,6 +62,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import schwarz.digits.showcase.platform.keyboardPadding
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -81,8 +83,9 @@ import schwarz.digits.natrium.chat.QuotedMessage
 import schwarz.digits.natrium.chat.ReactionInfo
 import schwarz.digits.showcase.platform.openFile
 import schwarz.digits.showcase.viewmodel.ChatViewModel
+import schwarz.digits.showcase.viewmodel.PickedFile
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
@@ -95,14 +98,43 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 val bytes = file.readBytes()
                 val tempPath = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "natrium-upload-${file.name}"
                 FileSystem.SYSTEM.write(tempPath) { write(bytes) }
-                viewModel.sendFile(tempPath, file.name, bytes.size.toLong())
+                viewModel.addAttachment(PickedFile(tempPath, file.name, bytes.size.toLong()))
             }
         }
     }
 
-    LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty())
-            listState.animateScrollToItem(uiState.messages.lastIndex)
+    var answeringRequest by remember { mutableStateOf<ChatMessage?>(null) }
+    val messagesById = remember(uiState.messages) { uiState.messages.associateBy { it.id } }
+    val answerIndex = remember(uiState.messages) { indexAnswers(uiState.messages) }
+    val visibleMessages = remember(uiState.messages, answerIndex) {
+        uiState.messages.filter { it.id !in answerIndex.hiddenMessageIds }
+    }
+    val openAttachment: (ChatMessage) -> Unit = { fileMessage ->
+        scope.launch {
+            when (val result = viewModel.downloadFile(fileMessage.id)) {
+                is FileDownloadResult.Success -> openFile(result.filePath.toString())
+                is FileDownloadResult.Failure -> Unit
+            }
+        }
+    }
+
+    answeringRequest?.let { requestMessage ->
+        val request = (requestMessage.value as? MessageValue.RequestValue)?.request
+        if (request != null) {
+            RequestAnswerSheet(
+                request = request,
+                onDismiss = { answeringRequest = null },
+                onSubmit = { response, attachments ->
+                    viewModel.sendResponse(requestMessage.id, response, attachments)
+                    answeringRequest = null
+                },
+            )
+        }
+    }
+
+    LaunchedEffect(visibleMessages.size) {
+        if (visibleMessages.isNotEmpty())
+            listState.animateScrollToItem(visibleMessages.lastIndex)
     }
 
     if (showSheet) {
@@ -151,7 +183,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding).keyboardPadding()) {
             val sendError = uiState.sendError
             if (sendError != null) {
                 Surface(
@@ -190,8 +222,17 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             }
 
             LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                items(uiState.messages) { msg ->
-                    MessageBubble(msg, viewModel, scope)
+                items(visibleMessages, key = { it.id }) { msg ->
+                    MessageBubble(
+                        msg = msg,
+                        viewModel = viewModel,
+                        coroutineScope = scope,
+                        messagesById = messagesById,
+                        answer = answerIndex.byRequestId[msg.id],
+                        messageAttachments = answerIndex.messageAttachments[msg.id].orEmpty(),
+                        onAnswer = { answeringRequest = msg },
+                        onOpenAttachment = openAttachment,
+                    )
                 }
             }
 
@@ -242,6 +283,23 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 }
             }
 
+            if (uiState.pendingAttachments.isNotEmpty()) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    uiState.pendingAttachments.forEach { file ->
+                        InputChip(
+                            selected = false,
+                            onClick = { viewModel.removeAttachment(file) },
+                            label = { Text(file.fileName, maxLines = 1) },
+                            leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                            trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp)) },
+                        )
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -257,7 +315,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 )
                 IconButton(
                     onClick = viewModel::sendMessage,
-                    enabled = uiState.inputText.isNotBlank(),
+                    enabled = uiState.inputText.isNotBlank() || uiState.pendingAttachments.isNotEmpty(),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
                 }
@@ -317,11 +375,18 @@ private fun MessageBubble(
     msg: ChatMessage,
     viewModel: ChatViewModel,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
+    messagesById: Map<String, ChatMessage>,
+    answer: RequestAnswer?,
+    messageAttachments: List<ChatMessage>,
+    onAnswer: () -> Unit,
+    onOpenAttachment: (ChatMessage) -> Unit,
 ) {
     when (msg.value) {
         is MessageValue.SystemValue -> SystemMessageRow(msg)
         is MessageValue.KnockValue -> KnockMessageRow(msg)
-        else -> RegularMessageBubble(msg, viewModel, coroutineScope)
+        else -> RegularMessageBubble(
+            msg, viewModel, coroutineScope, messagesById, answer, messageAttachments, onAnswer, onOpenAttachment,
+        )
     }
 }
 
@@ -359,6 +424,11 @@ private fun RegularMessageBubble(
     msg: ChatMessage,
     viewModel: ChatViewModel,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
+    messagesById: Map<String, ChatMessage>,
+    answer: RequestAnswer?,
+    messageAttachments: List<ChatMessage>,
+    onAnswer: () -> Unit,
+    onOpenAttachment: (ChatMessage) -> Unit,
 ) {
     val alignment = if (msg.isSelf) Alignment.End else Alignment.Start
     val bubbleColor = if (msg.isSelf)
@@ -393,6 +463,10 @@ private fun RegularMessageBubble(
                         is MessageValue.TextValue -> {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(value.value)
+                                messageAttachments.forEach { AttachmentLine(it, onOpenAttachment) }
+                                // referenced files that are not loaded (yet)
+                                val missing = value.attachmentMessageIds.size - messageAttachments.size
+                                if (missing > 0) AttachmentHint(missing)
                                 if (msg.isEdited) {
                                     Text(
                                         "(edited)",
@@ -508,6 +582,19 @@ private fun RegularMessageBubble(
                             }
                         }
                     }
+                        is MessageValue.RequestValue -> RequestContent(
+                            request = value.request,
+                            requestAttachments = messageAttachments,
+                            isAnswered = msg.answeredByMessageId != null,
+                            answer = answer,
+                            onAnswer = onAnswer,
+                            onOpenAttachment = onOpenAttachment,
+                        )
+                        is MessageValue.ResponseValue -> ResponseContent(
+                            response = value.response,
+                            request = (messagesById[value.requestMessageId]?.value as? MessageValue.RequestValue)?.request,
+                        )
+                        is MessageValue.UnsupportedValue -> UnsupportedContent()
                         is MessageValue.KnockValue,
                         is MessageValue.SystemValue -> {
                             // Handled by separate composables above
@@ -635,6 +722,8 @@ private fun messagePreviewText(value: MessageValue): String = when (value) {
     is MessageValue.TextValue -> value.value
     is MessageValue.FileValue -> value.fileLink.fileName
     is MessageValue.LocationValue -> value.name ?: "Location"
+    is MessageValue.RequestValue -> value.request.subject.ifBlank { value.request.typeLabel() }
+    is MessageValue.ResponseValue -> responseSummary(value.response, null)
     else -> "Message"
 }
 

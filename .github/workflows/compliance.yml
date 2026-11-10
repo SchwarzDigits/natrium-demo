@@ -13,6 +13,4 @@ on:
 jobs:
   compliance:
     uses: SchwarzDigits/oss-compliance/.github/workflows/full-check.yml@v1
-    with:
-      pre-analyzer-script: .github/scripts/prepare-compliance.sh
  

@@ -34,6 +34,8 @@ val generateBackendConfig by tasks.registering {
             |    const val TEAMS = "${backendProp("backend.teams")}"
             |    const val BLACK_LIST = "${backendProp("backend.blackList")}"
             |    const val WEBSITE = "${backendProp("backend.website")}"
+            |    // optional: base URL of case links ("Behördenlink"), see natrium-core/docs/case-links.md
+            |    val CASE_LINK: String? = ${backendProps.getProperty("backend.caseLink")?.let { "\"$it\"" } ?: "null"}
             |}
             """.trimMargin()
         )
@@ -73,7 +75,7 @@ kotlin {
 
             implementation(libs.navigation.compose)
             implementation(libs.lifecycle.viewmodel.compose)
-            implementation("schwarz.opensource.natrium:natrium-core:0.0.5")
+            implementation("schwarz.opensource.natrium:natrium-core:0.1.1")
             implementation(libs.datetime)
             implementation(libs.filekit.compose)
             implementation(libs.okio.core)

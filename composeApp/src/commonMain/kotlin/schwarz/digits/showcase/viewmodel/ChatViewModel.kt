@@ -15,7 +15,9 @@ import schwarz.digits.natrium.conversation.GetJoinLinkResult
 import schwarz.digits.natrium.conversation.GetMembersResult
 import schwarz.digits.natrium.chat.ChatMessage
 import schwarz.digits.natrium.chat.FileDownloadResult
+import schwarz.digits.natrium.chat.InvalidResponseReason
 import schwarz.digits.natrium.chat.MessageValue
+import schwarz.digits.natrium.chat.Response
 import schwarz.digits.natrium.chat.SendMessageResult
 import schwarz.digits.natrium.file.FileLink
 import okio.FileSystem
@@ -33,6 +35,7 @@ data class ChatUiState(
     val joinLinkError: String? = null,
     val sendError: String? = null,
     val replyingTo: ChatMessage? = null,
+    val pendingAttachments: List<PickedFile> = emptyList(),
 )
 
 class ChatViewModel(private val conversationOperations: ConversationOperations) : ViewModel() {
@@ -114,13 +117,25 @@ class ChatViewModel(private val conversationOperations: ConversationOperations) 
         }
     }
 
+    fun addAttachment(file: PickedFile) {
+        _uiState.update { it.copy(pendingAttachments = it.pendingAttachments + file) }
+    }
+
+    fun removeAttachment(file: PickedFile) {
+        _uiState.update { it.copy(pendingAttachments = it.pendingAttachments - file) }
+    }
+
     fun sendMessage() {
         val text = _uiState.value.inputText.trim()
-        if (text.isEmpty()) return
+        val attachments = _uiState.value.pendingAttachments
+        if (text.isEmpty() && attachments.isEmpty()) return
         val replyTo = _uiState.value.replyingTo
-        _uiState.update { it.copy(inputText = "", replyingTo = null) }
+        _uiState.update { it.copy(inputText = "", replyingTo = null, pendingAttachments = emptyList(), sendError = null) }
         viewModelScope.launch {
-            if (replyTo != null) {
+            if (attachments.isNotEmpty()) {
+                // Natrium uploads the files first and references them from the text message
+                handleSendResult(conversationOperations.chat().sendText(text, attachments.map { it.toFileLink() }))
+            } else if (replyTo != null) {
                 conversationOperations.chat().sendReply(MessageValue.TextValue(text), replyTo.id)
             } else {
                 conversationOperations.chat().sendMessage(MessageValue.TextValue(text))
@@ -133,25 +148,31 @@ class ChatViewModel(private val conversationOperations: ConversationOperations) 
         return conversationOperations.chat().downloadFile(messageId)
     }
 
-    fun sendFile(path: Path, fileName: String, size: Long) {
+    /** Answers a request; [attachments] are uploaded by Natrium before the response is sent. */
+    fun sendResponse(requestMessageId: String, response: Response, attachments: List<PickedFile> = emptyList()) {
         viewModelScope.launch {
             _uiState.update { it.copy(sendError = null) }
-            val mimeType = guessMimeType(fileName)
-            val fileLink = FileLink.fromLocal(path, fileName, mimeType, size)
-            when (val result = conversationOperations.chat().sendMessage(MessageValue.FileValue(fileLink))) {
-                is SendMessageResult.Success -> {}
-                is SendMessageResult.Failure.DisabledByTeam ->
-                    _uiState.update { it.copy(sendError = "File sharing is disabled.") }
-                is SendMessageResult.Failure.RestrictedFileType ->
-                    _uiState.update { it.copy(sendError = "This file type is not allowed.") }
-                is SendMessageResult.Failure.FileTooLarge ->
-                    _uiState.update { it.copy(sendError = "File too large (max ${result.limitBytes / 1024 / 1024} MB).") }
-                is SendMessageResult.Failure.NotLoggedIn ->
-                    _uiState.update { it.copy(sendError = "Not logged in.") }
-                is SendMessageResult.Failure.Unknown ->
-                    _uiState.update { it.copy(sendError = result.message) }
-            }
+            val fileLinks = attachments.map { it.toFileLink() }
+            handleSendResult(conversationOperations.chat().sendResponse(requestMessageId, response, fileLinks))
         }
+    }
+
+    private fun handleSendResult(result: SendMessageResult) {
+        val error = when (result) {
+            is SendMessageResult.Success -> return
+            is SendMessageResult.Failure.DisabledByTeam -> "File sharing is disabled."
+            is SendMessageResult.Failure.RestrictedFileType -> "This file type is not allowed."
+            is SendMessageResult.Failure.FileTooLarge -> "File too large (max ${result.limitBytes / 1024 / 1024} MB)."
+            is SendMessageResult.Failure.NotLoggedIn -> "Not logged in."
+            is SendMessageResult.Failure.InvalidResponse -> when (result.reason) {
+                InvalidResponseReason.ALREADY_ANSWERED -> "This request has already been answered."
+                InvalidResponseReason.REQUEST_NOT_FOUND -> "The request could not be found."
+                InvalidResponseReason.SELECTION_OUT_OF_RANGE -> "Please choose the number of options the request asks for."
+                else -> "Invalid answer (${result.reason})."
+            }
+            is SendMessageResult.Failure.Unknown -> result.message
+        }
+        _uiState.update { it.copy(sendError = error) }
     }
 
     fun dismissSendError() {
@@ -164,6 +185,11 @@ class ChatViewModel(private val conversationOperations: ConversationOperations) 
         typingCancellable?.cancel()
     }
 }
+
+/** A locally copied file picked by the user. */
+data class PickedFile(val path: Path, val fileName: String, val size: Long)
+
+private fun PickedFile.toFileLink() = FileLink.fromLocal(path, fileName, guessMimeType(fileName), size)
 
 private fun guessMimeType(fileName: String): String {
     val ext = fileName.substringAfterLast('.', "").lowercase()
