@@ -13,10 +13,7 @@ Targets **Android**, **iOS** (arm64 + simulator), and **Desktop** (JVM).
 
 ## First-Time Setup
 
-The Natrium SDK is consumed as `schwarz.opensource.natrium:natrium-core`. On this branch it is **not** resolved
-from Maven Central: `settings.gradle.kts` includes the local checkout `../natrium` as a Gradle composite build,
-so Gradle substitutes the dependency with `../natrium/natrium-core`. Clone `natrium` next to `natrium-demo`
-and give it its own `local.properties` with `sdk.dir=...` (or set `ANDROID_HOME`).
+The Natrium SDK is consumed as a regular Gradle dependency (`schwarz.opensource.natrium:natrium-core`) resolved from Maven Central.
 
 ### 1. Clone Natrium Demo
 
