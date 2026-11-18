@@ -13,7 +13,7 @@ Targets **Android**, **iOS** (arm64 + simulator), and **Desktop** (JVM).
 
 ## First-Time Setup
 
-The Natrium SDK is consumed as a regular Gradle dependency (`schwarz.opensource.natrium:natrium-core`) resolved from Maven Central.
+The Natrium SDK is consumed as a regular Gradle dependency (`schwarz.opensource.natrium:natrium-core`) resolved from Maven Central. The Kalium SDK it depends on (`schwarz.opensource.natrium:logic`) comes from the fork's Maven repository on STACKIT, which `settings.gradle.kts` declares.
 
 ### 1. Clone Natrium Demo
 
