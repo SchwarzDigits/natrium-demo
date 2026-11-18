@@ -10,6 +10,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven("https://natrium-repository.object.storage.eu01.onstackit.cloud") {
+            content { includeGroup("schwarz.opensource.natrium") }
+        }
     }
 }
 
